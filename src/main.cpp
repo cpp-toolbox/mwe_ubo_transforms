@@ -13,15 +13,21 @@ GLuint uboModelMatrices;
 
 void update_matrices(double time_since_start_of_program_sec, glm::mat4 *model_matrices) {
     int numTriangles = 100;
-    float scale_x = 3 * 0.1;
-    float scale_y = 3 * 0.1;
+    float scale_x = 3 * 0.1f;
+    float scale_y = 3 * 0.1f;
+
     for (int i = 0; i < numTriangles; ++i) {
         float angle = 2.0f * M_PI * i / numTriangles;
         glm::mat4 model = glm::mat4(1.0f);
-        model = glm::translate(model, glm::vec3(0.5 * cos(angle + time_since_start_of_program_sec * scale_x),
-                                                0.5 * sin(angle + time_since_start_of_program_sec * scale_y), 0.0f));
-
+        model = glm::translate(model, glm::vec3(0.75f * cos(angle + time_since_start_of_program_sec * scale_x),
+                                                0.75f * sin(angle + time_since_start_of_program_sec * scale_y), 0.0f));
         model = glm::scale(model, glm::vec3(0.3f));
+
+        float rotation_angle = time_since_start_of_program_sec; // Rotation speed proportional to time
+        glm::mat4 rotation_matrix = glm::rotate(glm::mat4(1.0f), rotation_angle, glm::vec3(0.0f, 1.0f, 1.0f));
+
+        model = rotation_matrix * model;
+
         model_matrices[i] = model;
     }
 }
@@ -42,11 +48,29 @@ int main() {
     ShaderCache shader_cache(requested_shaders, sinks);
     Batcher batcher(shader_cache);
 
-    std::vector<glm::vec3> triangle = {{0.0f, 0.1f, 0.0f}, {-0.1f, -0.1f, 0.0f}, {0.1f, -0.1f, 0.0f}};
+    std::vector<glm::vec3> base_triangle = {{0.0f, 0.1f, 0.0f}, {-0.1f, -0.1f, 0.0f}, {0.1f, -0.1f, 0.0f}};
 
-    std::vector<unsigned int> indices = {0, 1, 2};
+    std::vector<glm::vec3> triangle_vertices;
+    std::vector<unsigned int> indices;
+    std::vector<unsigned int> ltw_matrix_indices;
 
-    std::vector<unsigned int> ltw_matrix_indices = {3, 3, 3};
+    const int num_triangles = 100;
+
+    for (int i = 0; i < num_triangles; ++i) {
+        // Add vertices for this triangle (no transformation)
+        triangle_vertices.insert(triangle_vertices.end(), base_triangle.begin(), base_triangle.end());
+
+        // Add indices for this triangle
+        unsigned int base_index = i * 3; // Each triangle has 3 vertices
+        indices.push_back(base_index);
+        indices.push_back(base_index + 1);
+        indices.push_back(base_index + 2);
+
+        // Add ltw_matrix_indices for this triangle
+        ltw_matrix_indices.push_back(i);
+        ltw_matrix_indices.push_back(i);
+        ltw_matrix_indices.push_back(i);
+    }
 
     glm::mat4 modelMatrices[100];
     update_matrices(0.0, modelMatrices);
@@ -81,7 +105,7 @@ int main() {
         glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(modelMatrices), modelMatrices);
         glBindBuffer(GL_UNIFORM_BUFFER, 0);
 
-        batcher.cwl_v_transformation_using_ubos_with_solid_color_shader_batcher.queue_draw(indices, triangle,
+        batcher.cwl_v_transformation_using_ubos_with_solid_color_shader_batcher.queue_draw(indices, triangle_vertices,
                                                                                            ltw_matrix_indices);
         batcher.cwl_v_transformation_using_ubos_with_solid_color_shader_batcher.draw_everything();
 
